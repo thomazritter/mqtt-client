@@ -192,6 +192,43 @@ export function useMqtt() {
     };
   }, [modoManual, manualServo, manualLed, manualBuzzer]);
 
+  // Fetch weather forecast from Tomorrow.io
+  const [weatherData, setWeatherData] = useState<any>(null);
+  async function fetchWeatherForecast(lat = 42.3478, lon = -71.0466) {
+    const apiKey = "7tYIxuunUWV1GZvCv3FQud191a2RPPai";
+    const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&apikey=${apiKey}`;
+    try {
+      console.log("[WEATHER] Fetching Tomorrow.io forecast...");
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Weather API error: ${res.status}`);
+      const data = await res.json();
+      setWeatherData(data); // Store full response
+      console.log("[WEATHER] Forecast data:", data);
+      return data;
+    } catch (err) {
+      console.error("[WEATHER] Error fetching forecast:", err);
+      setWeatherData(null);
+      return null;
+    }
+  }
+
+  // Helper to extract a summary for the UI
+  function getWeatherSummary() {
+    if (!weatherData || !weatherData.timelines) return null;
+    const hourly = weatherData.timelines.hourly?.[0]?.values;
+    if (!hourly) return null;
+    return {
+      temperature: hourly.temperature,
+      humidity: hourly.humidity,
+      precipitationProbability: hourly.precipitationProbability,
+      rainIntensity: hourly.rainIntensity,
+      weatherCode: hourly.weatherCode,
+      windSpeed: hourly.windSpeed,
+      windGust: hourly.windGust,
+      cloudCover: hourly.cloudCover,
+    };
+  }
+
   // Enhanced water level prediction with advanced analytics
   async function fetchWaterLevelPrediction() {
     const now = Date.now();
@@ -219,6 +256,8 @@ export function useMqtt() {
 
     setPredictionLoading(true);
     try {
+      // Fetch weather data from Tomorrow.io
+      const weatherData = await fetchWeatherForecast();
       // Simulate advanced API call with realistic delay
       await new Promise((resolve) => setTimeout(resolve, 800));
 
@@ -292,10 +331,20 @@ export function useMqtt() {
         );
 
       // Weather and seasonal insights
-      const weatherImpact = getWeatherImpact(
-        weatherPattern,
-        randomWeatherEvent,
-      );
+      let weatherImpact = getWeatherImpact(weatherPattern, randomWeatherEvent);
+      if (weatherData && weatherData.timelines && weatherData.timelines.hourly) {
+        // Example: use precipitation or temperature for impact
+        const nextHour = weatherData.timelines.hourly[0];
+        if (nextHour && nextHour.values) {
+          if (nextHour.values.precipitationIntensity > 0.5) {
+            weatherImpact = "Heavy rainfall expected (API)";
+          } else if (nextHour.values.precipitationIntensity > 0.1) {
+            weatherImpact = "Light rain expected (API)";
+          } else {
+            weatherImpact = "No significant rain (API)";
+          }
+        }
+      }
       const seasonalTrend = getSeasonalTrend(dayOfYear);
 
       const predictionData = {
@@ -556,5 +605,7 @@ export function useMqtt() {
     prediction,
     predictionLoading,
     fetchWaterLevelPrediction,
+    weatherData, // Expose full weather data
+    getWeatherSummary, // Expose summary helper
   };
 }
