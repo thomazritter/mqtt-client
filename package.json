@@ -13,6 +13,7 @@
     "mqtt": "^5.13.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-router-dom": "^6.30.1",
     "recharts": "^2.15.3"
   },
   "devDependencies": {
@@ -24,6 +25,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
+    "tempo-devtools": "^2.0.106",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.30.1",
     "vite": "^6.3.5"
