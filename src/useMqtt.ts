@@ -195,7 +195,7 @@ export function useMqtt() {
   // Fetch weather forecast from Tomorrow.io
   const [weatherData, setWeatherData] = useState<any>(null);
   async function fetchWeatherForecast(lat = 42.3478, lon = -71.0466) {
-    const apiKey = "7tYIxuunUWV1GZvCv3FQud191a2RPPai";
+    const apiKey = import.meta.env.VITE_TOMORROW_API_KEY;
     const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&apikey=${apiKey}`;
     try {
       console.log("[WEATHER] Fetching Tomorrow.io forecast...");
