@@ -22,27 +22,27 @@ function parseLogNivel(logText: string) {
 }
 
 function elaborarStatus(nivel: number) {
-  let servo = 1,
+  let servo = 0,
     led = 0,
     buzzer = 0;
   if (nivel <= 10) {
-    servo = 0;
-    led = 3;
-    buzzer = 2;
-  } else if (nivel <= 15) {
     servo = 1;
     led = 2;
     buzzer = 1;
+  } else if (nivel <= 15) {
+    servo = 0;
+    led = 2;
+    buzzer = 1;
   } else if (nivel <= 20) {
-    servo = 1;
+    servo = 0;
     led = 1;
     buzzer = 0;
   } else if (nivel <= 30) {
-    servo = 1;
+    servo = 0;
     led = 0;
     buzzer = 0;
   } else {
-    servo = 1;
+    servo = 0;
     led = 0;
     buzzer = 0;
   }
@@ -159,7 +159,7 @@ export function useMqtt() {
           lastLoggedNivel.current = value;
         }
         const { servo, led, buzzer } = elaborarStatus(value);
-        const statusStr = `servo:${servo},led:${led},buzzer:${buzzer},modo:auto`;
+        const statusStr = `"servo":${servo},"led":${led},"buzzer":${buzzer}`;
         // Only publish if status changed
         if (lastPublishedStatus.current !== statusStr) {
           client.publish(TOPICO_STATUS, statusStr);
@@ -176,7 +176,7 @@ export function useMqtt() {
         }
       } else if (modoManual) {
         // Always send manual status if changed
-        const statusStr = `servo:${manualServo},led:${manualLed},buzzer:${manualBuzzer},modo:manual`;
+        const statusStr = `"servo":${manualServo},"led":${manualLed},"buzzer":${manualBuzzer}`;
         if (lastPublishedStatus.current !== statusStr) {
           client.publish(TOPICO_STATUS, statusStr);
           lastPublishedStatus.current = statusStr;

@@ -53,9 +53,9 @@ function App() {
   const [alarmHistory, setAlarmHistory] = useState<any[]>([]);
 
   // Helper labels for display
-  const servoLabels = ["Aberto", "Fechado"];
-  const ledLabels = ["Desligado", "Ligado", "Piscante", "Piscante Forte"];
-  const buzzerLabels = ["Desligado", "Tocando", "Apitando"];
+  const servoLabels = ["Desligado", "Ativado"];
+  const ledLabels = ["Desligado", "Ligado (Full)", "Piscando"];
+  const buzzerLabels = ["Desligado", "Tocando/Ligado"];
 
   // Handler to update a specific level's setting
   function updateAutoLevel(
@@ -381,14 +381,14 @@ function App() {
                       disabled={!modoManual}
                       onClick={() => setManualServo(0)}
                     >
-                      Open Gate
+                      Servo: {servoLabels[0]}
                     </button>
                     <button
                       className={`btn${manualServo === 1 ? " active" : ""}`}
                       disabled={!modoManual}
                       onClick={() => setManualServo(1)}
                     >
-                      Close Gate
+                      Servo: {servoLabels[1]}
                     </button>
                   </div>
                 </div>
@@ -404,18 +404,39 @@ function App() {
                   </div>
                   <div className="controls-row" style={{ marginBottom: "0" }}>
                     <button
-                      className={`btn${manualLed > 0 ? " active" : ""}`}
+                      className={`btn${manualLed === 0 ? " active" : ""}`}
                       disabled={!modoManual}
-                      onClick={() => setManualLed((manualLed + 1) % 4)}
+                      onClick={() => setManualLed(0)}
                     >
-                      LED: {ledLabels[manualLed]}
+                      LED: {ledLabels[0]}
                     </button>
                     <button
-                      className={`btn${manualBuzzer > 0 ? " active" : ""}`}
+                      className={`btn${manualLed === 1 ? " active" : ""}`}
                       disabled={!modoManual}
-                      onClick={() => setManualBuzzer((manualBuzzer + 1) % 3)}
+                      onClick={() => setManualLed(1)}
                     >
-                      Buzzer: {buzzerLabels[manualBuzzer]}
+                      LED: {ledLabels[1]}
+                    </button>
+                    <button
+                      className={`btn${manualLed === 2 ? " active" : ""}`}
+                      disabled={!modoManual}
+                      onClick={() => setManualLed(2)}
+                    >
+                      LED: {ledLabels[2]}
+                    </button>
+                    <button
+                      className={`btn${manualBuzzer === 0 ? " active" : ""}`}
+                      disabled={!modoManual}
+                      onClick={() => setManualBuzzer(0)}
+                    >
+                      Buzzer: {buzzerLabels[0]}
+                    </button>
+                    <button
+                      className={`btn${manualBuzzer === 1 ? " active" : ""}`}
+                      disabled={!modoManual}
+                      onClick={() => setManualBuzzer(1)}
+                    >
+                      Buzzer: {buzzerLabels[1]}
                     </button>
                   </div>
                 </div>
