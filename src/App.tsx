@@ -250,21 +250,6 @@ function App() {
                 </button>
               </div>
 
-              {/* Weather summary display */}
-              {(() => {
-                const summary = getWeatherSummary();
-                return summary ? (
-                  <div className="weather-summary">
-                    <div><strong>Weather:</strong> {summary.weatherCode}</div>
-                    <div><strong>Temp:</strong> {summary.temperature}°C</div>
-                    <div><strong>Humidity:</strong> {summary.humidity}%</div>
-                    <div><strong>Rain:</strong> {summary.rainIntensity} mm/h</div>
-                    <div><strong>Clouds:</strong> {summary.cloudCover}%</div>
-                    <div><strong>Wind:</strong> {summary.windSpeed} m/s</div>
-                  </div>
-                ) : null;
-              })()}
-
               {predictionLoading && (
                 <div className="prediction-loading">
                   <div className="loading-spinner"></div>
@@ -293,7 +278,7 @@ function App() {
                         Predicted Level in {prediction.timeToReach}
                       </div>
                       <div className="prediction-confidence">
-                        Confidence: {prediction.confidence}% | Risk Level:{" "}
+                        Confidence: {prediction.confidence}% | Risk Level: {" "}
                         {prediction.riskLevel}/10
                       </div>
                     </div>
@@ -325,12 +310,10 @@ function App() {
 
                     <div className="prediction-insights">
                       <div className="insight-item">
-                        <strong>Weather Impact:</strong>{" "}
-                        {prediction.weatherImpact}
+                        <strong>Weather Impact:</strong> {prediction.weatherImpact}
                       </div>
                       <div className="insight-item">
-                        <strong>Seasonal Trend:</strong>{" "}
-                        {prediction.seasonalTrend}
+                        <strong>Seasonal Trend:</strong> {prediction.seasonalTrend}
                       </div>
                     </div>
                   </div>
