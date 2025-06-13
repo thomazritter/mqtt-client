@@ -5,7 +5,7 @@ Este sistema monitora e controla o nível de água em reservatórios usando Reac
 ## Funcionalidades
 
 - **Monitoramento em tempo real:** Exibe o nível de água atual e histórico em gráficos.
-- **Previsão com IA:** Mostra previsão do nível de água para as próximas 24h, considerando tendências e clima.
+- **Previsão:** Mostra previsão do nível de água para as próximas 24h, considerando tendências e clima.
 - **Controle automático:** Respostas automáticas configuráveis para diferentes faixas de nível de água (abrir/fechar comporta, LED, buzzer).
 - **Modo manual:** Permite controle direto dos atuadores pelo usuário.
 - **Histórico e alarmes:** Registra eventos de alarme e mudanças de status em arquivos de log.
@@ -40,11 +40,6 @@ Este sistema monitora e controla o nível de água em reservatórios usando Reac
 
 - **Automático:** O sistema reage sozinho conforme as faixas de nível configuradas.
 - **Manual:** O usuário pode acionar/desligar comporta, LED e buzzer manualmente.
-
-## Observações
-
-- Os arquivos de log são atualizados automaticamente a cada evento relevante.
-- O sistema é compatível com desktop e dispositivos móveis.
 
 ---
 Desenvolvido para monitoramento e automação de reservatórios de água com ESP32.
