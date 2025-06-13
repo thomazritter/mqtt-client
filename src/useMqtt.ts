@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import mqtt from "mqtt";
 // @ts-ignore
-import logNivelRaw from "../log_nivel.txt?raw";
+import logNivelRaw from "./log_nivel.txt?raw";
 
 const BROKER_URL = "wss://broker.hivemq.com:8884/mqtt";
 const TOPICO_NIVEL = "topic_sensor_uni";
 const TOPICO_STATUS = "topic_status_uni";
 
 function parseLogNivel(logText: string) {
-  // Parse lines like: YYYY-MM-DD HH:MM:SS <nivel>
   return logText
     .split("\n")
     .filter((line) => line && !line.startsWith("#"))
@@ -21,35 +20,60 @@ function parseLogNivel(logText: string) {
     });
 }
 
-function elaborarStatus(nivel: number) {
-  let servo = 0,
-    led = 0,
-    buzzer = 0;
+// --- Status Calculation Logic ---
+function getStatusFromNivel(nivel: number, autoLevels?: Array<{servo: number, led: number, buzzer: number}>) {
+  if (autoLevels && Array.isArray(autoLevels) && autoLevels.length === 5) {
+    if (nivel <= 10) return autoLevels[0];
+    if (nivel <= 15) return autoLevels[1];
+    if (nivel <= 20) return autoLevels[2];
+    if (nivel <= 30) return autoLevels[3];
+    return autoLevels[4];
+  }
+
+  let servo = 0, led = 0, buzzer = 0;
   if (nivel <= 10) {
-    servo = 1;
-    led = 2;
-    buzzer = 1;
+    servo = 1; led = 2; buzzer = 1;
   } else if (nivel <= 15) {
-    servo = 0;
-    led = 2;
-    buzzer = 1;
+    servo = 0; led = 2; buzzer = 1;
   } else if (nivel <= 20) {
-    servo = 0;
-    led = 1;
-    buzzer = 0;
+    servo = 0; led = 1; buzzer = 0;
   } else if (nivel <= 30) {
-    servo = 0;
-    led = 0;
-    buzzer = 0;
+    servo = 0; led = 0; buzzer = 0;
   } else {
-    servo = 0;
-    led = 0;
-    buzzer = 0;
+    servo = 0; led = 0; buzzer = 0;
   }
   return { servo, led, buzzer };
 }
 
-export function useMqtt() {
+// --- MQTT Status String Builder ---
+function buildStatusString(
+  servo: number,
+  led: number,
+  buzzer: number,
+) {
+  const variable = `{"servo":${servo},"led":${led},"buzzer":${buzzer}}`;
+  return variable;
+}
+
+// --- API Weather Data Normalization ---
+function normalizeWeatherData(weatherData: any) {
+  if (!weatherData || !weatherData.timelines || !weatherData.timelines.hourly)
+    return null;
+  const hourly = weatherData.timelines.hourly[0]?.values;
+  if (!hourly) return null;
+  return {
+    temperature: hourly.temperature,
+    humidity: hourly.humidity,
+    precipitationProbability: hourly.precipitationProbability,
+    rainIntensity: hourly.rainIntensity,
+    weatherCode: hourly.weatherCode,
+    windSpeed: hourly.windSpeed,
+    windGust: hourly.windGust,
+    cloudCover: hourly.cloudCover,
+  };
+}
+
+export function useMqtt(autoLevels?: Array<{servo: number, led: number, buzzer: number}>) {
   const clientRef = useRef<any>(null);
   const [nivel, setNivel] = useState<number | null>(null);
   const [status, setStatus] = useState<string>("");
@@ -58,25 +82,19 @@ export function useMqtt() {
   >([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  // Track last values
   const ultimoNivel = useRef<number | null>(null);
   const ultimoServo = useRef<number | null>(null);
   const ultimoLed = useRef<number | null>(null);
   const ultimoBuzzer = useRef<number | null>(null);
-  // Manual mode state
   const [modoManual, setModoManual] = useState(false);
   const [manualServo, setManualServo] = useState(1);
   const [manualLed, setManualLed] = useState(0);
   const [manualBuzzer, setManualBuzzer] = useState(0);
-  // Track last published status
   const lastPublishedStatus = useRef<string | null>(null);
-  // Track last logged nivel
   const lastLoggedNivel = useRef<number | null>(null);
-  // Cache for history data
   const historyCache = useRef<{ time: string; value: number }[]>([]);
   const lastRefresh = useRef<number>(0);
 
-  // Enhanced prediction state with multiple timeframes
   const [prediction, setPrediction] = useState<{
     futureLevel: number;
     timeToReach: string;
@@ -92,17 +110,37 @@ export function useMqtt() {
   const predictionCache = useRef<any>(null);
   const lastPredictionFetch = useRef<number>(0);
 
-  // Initialize prediction on startup
   const [initialPredictionLoaded, setInitialPredictionLoaded] = useState(false);
 
-  // Helper to append to log_nivel.txt (browser: simulate, node: real append)
   function appendNivelLog(value: number) {
     const now = new Date();
-    const line = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${now.toTimeString().slice(0, 8)} ${value.toFixed(1)}\n`;
-    // In browser, you can't write to file system directly. In Node, use fs.appendFileSync.
-    // Here, you may want to send this to a backend or use an API.
-    // For now, just log to console as a placeholder.
+    const line = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+      2,
+      "0",
+    )}-${String(now.getDate()).padStart(2, "0")} ${now.toTimeString().slice(
+      0,
+      8,
+    )} ${value.toFixed(1)}\n`;
+
     console.log("[LOG_NIVEL]", line.trim());
+  }
+
+  function appendStatusLog(servo: number, led: number, buzzer: number) {
+    const now = new Date();
+    const line = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${now.toTimeString().slice(0, 8)} STATUS servo:${servo} led:${led} buzzer:${buzzer}\n`;
+    try {
+      // @ts-ignore
+      if (typeof window === "undefined" && require) {
+        const fs = require("fs");
+        const path = require("path");
+        const logPath = path.resolve(__dirname, "../log_status.txt");
+        fs.appendFileSync(logPath, line);
+      } else {
+        console.log("[LOG_STATUS]", line.trim());
+      }
+    } catch (e) {
+      console.log("[LOG_STATUS]", line.trim());
+    }
   }
 
   useEffect(() => {
@@ -110,28 +148,22 @@ export function useMqtt() {
     clientRef.current = client;
 
     client.on("connect", () => {
-      console.log("MQTT Connected");
       setIsConnected(true);
       setIsLoading(false);
       client.subscribe([TOPICO_NIVEL, TOPICO_STATUS]);
     });
 
-    client.on("disconnect", () => {
-      console.log("MQTT Disconnected");
-      setIsConnected(false);
-    });
-
+    client.on("disconnect", () => setIsConnected(false));
     client.on("error", (error) => {
-      console.error("MQTT Error:", error);
       setIsConnected(false);
       setIsLoading(false);
+      console.error("MQTT Error:", error);
     });
 
     client.on("message", (topic, message) => {
       if (topic === TOPICO_NIVEL && !modoManual) {
         const value = Number(message.toString());
-        if (isNaN(value)) return; // Validate numeric value
-
+        if (isNaN(value)) return;
         setNivel(value);
         const newEntry = {
           time: new Date().toLocaleTimeString("en-US", {
@@ -140,17 +172,13 @@ export function useMqtt() {
             minute: "2-digit",
             second: "2-digit",
           }),
-          value: Math.round(value * 10) / 10, // Round to 1 decimal
+          value: Math.round(value * 10) / 10,
         };
-
-        // Update history with smart caching
         setNivelHistory((prev) => {
           const updated = [...prev.slice(-49), newEntry];
           historyCache.current = updated;
           return updated;
         });
-
-        // Only log if changed by more than 2cm
         if (
           lastLoggedNivel.current === null ||
           Math.abs(value - lastLoggedNivel.current) > 2
@@ -158,111 +186,86 @@ export function useMqtt() {
           appendNivelLog(value);
           lastLoggedNivel.current = value;
         }
-        const { servo, led, buzzer } = elaborarStatus(value);
-        const statusStr = `"servo":${servo},"led":${led},"buzzer":${buzzer}`;
-        // Only publish if status changed
-        if (lastPublishedStatus.current !== statusStr) {
+        // Only send status string if the hardware status (servo, led, buzzer) changes
+        const { servo, led, buzzer } = getStatusFromNivel(value, autoLevels);
+        const statusStr = buildStatusString(servo, led, buzzer);
+        const statusChanged =
+          ultimoServo.current !== servo ||
+          ultimoLed.current !== led ||
+          ultimoBuzzer.current !== buzzer;
+        if (statusChanged) {
           client.publish(TOPICO_STATUS, statusStr);
           lastPublishedStatus.current = statusStr;
+          ultimoServo.current = servo;
+          ultimoLed.current = led;
+          ultimoBuzzer.current = buzzer;
+          appendStatusLog(servo, led, buzzer);
         }
-        ultimoNivel.current = value;
-        ultimoServo.current = servo;
-        ultimoLed.current = led;
-        ultimoBuzzer.current = buzzer;
-
-        // Trigger prediction update when new data arrives
-        if (nivelHistory.length > 5) {
-          fetchWaterLevelPrediction();
-        }
+        if (nivelHistory.length > 5) fetchWaterLevelPrediction();
       } else if (modoManual) {
         // Always send manual status if changed
-        const statusStr = `"servo":${manualServo},"led":${manualLed},"buzzer":${manualBuzzer}`;
+        const statusStr = buildStatusString(
+          manualServo,
+          manualLed,
+          manualBuzzer
+        );
         if (lastPublishedStatus.current !== statusStr) {
+          console.log(statusStr);
+
           client.publish(TOPICO_STATUS, statusStr);
           lastPublishedStatus.current = statusStr;
+          appendStatusLog(manualServo, manualLed, manualBuzzer);
         }
       }
-      if (topic === TOPICO_STATUS) {
-        setStatus(message.toString());
-      }
+      if (topic === TOPICO_STATUS) setStatus(message.toString());
     });
-
     return () => {
       client.end();
     };
   }, [modoManual, manualServo, manualLed, manualBuzzer]);
 
-  // Fetch weather forecast from Tomorrow.io
+  // --- Weather API Call ---
   const [weatherData, setWeatherData] = useState<any>(null);
   async function fetchWeatherForecast(lat = 42.3478, lon = -71.0466) {
     const apiKey = import.meta.env.VITE_TOMORROW_API_KEY;
     const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&apikey=${apiKey}`;
     try {
-      console.log("[WEATHER] Fetching Tomorrow.io forecast...");
       const res = await fetch(url);
       if (!res.ok) throw new Error(`Weather API error: ${res.status}`);
       const data = await res.json();
-      setWeatherData(data); // Store full response
-      console.log("[WEATHER] Forecast data:", data);
+      setWeatherData(data);
       return data;
     } catch (err) {
-      console.error("[WEATHER] Error fetching forecast:", err);
       setWeatherData(null);
+      console.error("[WEATHER] Error fetching forecast:", err);
       return null;
     }
   }
 
-  // Helper to extract a summary for the UI
-  function getWeatherSummary() {
-    if (!weatherData || !weatherData.timelines) return null;
-    const hourly = weatherData.timelines.hourly?.[0]?.values;
-    if (!hourly) return null;
-    return {
-      temperature: hourly.temperature,
-      humidity: hourly.humidity,
-      precipitationProbability: hourly.precipitationProbability,
-      rainIntensity: hourly.rainIntensity,
-      weatherCode: hourly.weatherCode,
-      windSpeed: hourly.windSpeed,
-      windGust: hourly.windGust,
-      cloudCover: hourly.cloudCover,
-    };
-  }
-
-  // Enhanced water level prediction with advanced analytics
+  // --- Prediction Logic ---
   async function fetchWaterLevelPrediction() {
     const now = Date.now();
-    // Cache prediction for 3 minutes for more frequent updates
     if (now - lastPredictionFetch.current < 180000 && predictionCache.current) {
       setPrediction(predictionCache.current);
       return;
     }
-
-    // Allow prediction with less data for initial startup
     const currentLevel =
       nivel ||
       (nivelHistory.length > 0
         ? nivelHistory[nivelHistory.length - 1].value
         : 50);
     const hasMinimalData = nivelHistory.length >= 3;
-
     if (!hasMinimalData && !initialPredictionLoaded) {
-      // Generate initial prediction with default data
       const initialPrediction = generateInitialPrediction(currentLevel);
       setPrediction(initialPrediction);
       setInitialPredictionLoaded(true);
       return;
     }
-
     setPredictionLoading(true);
     try {
-      // Fetch weather data from Tomorrow.io
       const weatherData = await fetchWeatherForecast();
-      // Simulate advanced API call with realistic delay
       await new Promise((resolve) => setTimeout(resolve, 800));
-
-      // Enhanced trend analysis
-      const recentData = nivelHistory.slice(-15); // More data points
+      const recentData = nivelHistory.slice(-15);
       const shortTermTrend =
         recentData.length > 5
           ? (recentData[recentData.length - 1].value -
@@ -274,37 +277,27 @@ export function useMqtt() {
           ? (recentData[recentData.length - 1].value - recentData[0].value) /
             recentData.length
           : 0;
-
-      // Advanced environmental factors
       const hour = new Date().getHours();
       const dayOfYear = Math.floor(
         (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) /
           (1000 * 60 * 60 * 24),
       );
-
-      // Weather simulation (more realistic patterns)
-      const weatherPattern = Math.sin((dayOfYear / 365) * 2 * Math.PI) * 0.3; // Seasonal pattern
-      const dailyPattern = Math.sin((hour / 24) * 2 * Math.PI) * 0.15; // Daily pattern
-      const randomWeatherEvent = (Math.random() - 0.5) * 0.4; // Random weather
-
-      // Calculate prediction with multiple factors
-      const trendWeight = 0.4;
-      const weatherWeight = 0.3;
-      const seasonalWeight = 0.2;
-      const randomWeight = 0.1;
-
+      const weatherPattern = Math.sin((dayOfYear / 365) * 2 * Math.PI) * 0.3;
+      const dailyPattern = Math.sin((hour / 24) * 2 * Math.PI) * 0.15;
+      const randomWeatherEvent = (Math.random() - 0.5) * 0.4;
+      const trendWeight = 0.4,
+        weatherWeight = 0.3,
+        seasonalWeight = 0.2,
+        randomWeight = 0.1;
       const predictedChange =
-        (shortTermTrend * 0.7 + longTermTrend * 0.3) * trendWeight * 24 + // 24h trend projection
+        (shortTermTrend * 0.7 + longTermTrend * 0.3) * trendWeight * 24 +
         weatherPattern * weatherWeight * 15 +
         dailyPattern * seasonalWeight * 8 +
         randomWeatherEvent * randomWeight * 5;
-
       const futureLevel = Math.max(
         0,
         Math.min(100, currentLevel + predictedChange),
       );
-
-      // Dynamic confidence based on data quality and consistency
       const dataConsistency =
         recentData.length > 5
           ? 1 - Math.abs(shortTermTrend - longTermTrend) / 10
@@ -313,27 +306,15 @@ export function useMqtt() {
         0.65,
         Math.min(0.94, dataConsistency * 0.85 + 0.1),
       );
-
-      // Risk assessment
-      const riskLevel = calculateRiskLevel(
+      const riskLevel = calculateRiskLevel(futureLevel, shortTermTrend, currentLevel);
+      const { recommendation, severity, actionRequired } = generateRecommendation(
         futureLevel,
-        shortTermTrend,
         currentLevel,
+        shortTermTrend,
+        riskLevel,
       );
-
-      // Enhanced recommendations with proactive actions
-      const { recommendation, severity, actionRequired } =
-        generateRecommendation(
-          futureLevel,
-          currentLevel,
-          shortTermTrend,
-          riskLevel,
-        );
-
-      // Weather and seasonal insights
       let weatherImpact = getWeatherImpact(weatherPattern, randomWeatherEvent);
       if (weatherData && weatherData.timelines && weatherData.timelines.hourly) {
-        // Example: use precipitation or temperature for impact
         const nextHour = weatherData.timelines.hourly[0];
         if (nextHour && nextHour.values) {
           if (nextHour.values.precipitationIntensity > 0.5) {
@@ -346,7 +327,6 @@ export function useMqtt() {
         }
       }
       const seasonalTrend = getSeasonalTrend(dayOfYear);
-
       const predictionData = {
         futureLevel: Math.round(futureLevel * 10) / 10,
         timeToReach: "24 hours",
@@ -358,7 +338,6 @@ export function useMqtt() {
         weatherImpact,
         seasonalTrend,
       };
-
       predictionCache.current = predictionData;
       setPrediction(predictionData);
       lastPredictionFetch.current = now;
@@ -605,7 +584,7 @@ export function useMqtt() {
     prediction,
     predictionLoading,
     fetchWaterLevelPrediction,
-    weatherData, // Expose full weather data
-    getWeatherSummary, // Expose summary helper
+    weatherData,
+    getWeatherSummary: () => normalizeWeatherData(weatherData),
   };
 }

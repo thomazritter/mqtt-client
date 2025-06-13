@@ -13,9 +13,18 @@ import { useRoutes } from "react-router-dom";
 import routes from "tempo-routes";
 
 // @ts-ignore
-import logAlarmRaw from "../log_alarm.txt?raw";
+import logAlarmRaw from "./log_alarm.txt?raw";
 
 function App() {
+  const [autoLevels, setAutoLevels] = useState([
+    { servo: 1, led: 2, buzzer: 1 }, // <= 10
+    { servo: 0, led: 2, buzzer: 1 }, // 11-15
+    { servo: 0, led: 1, buzzer: 0 }, // 16-20
+    { servo: 0, led: 0, buzzer: 0 }, // 21-30
+    { servo: 0, led: 0, buzzer: 0 }, // > 30
+  ]);
+
+  // Pass autoLevels to useMqtt so backend logic uses UI config
   const {
     nivel,
     status,
@@ -35,19 +44,11 @@ function App() {
     prediction,
     predictionLoading,
     fetchWaterLevelPrediction,
-    weatherData, // removed unused variable warning
+    weatherData, 
     getWeatherSummary,
-  } = useMqtt();
-  const [activeTab, setActiveTab] = useState("Dashboard");
+  } = useMqtt(autoLevels);
 
-  // Automatic control settings for each level (servo, led, buzzer)
-  const [autoLevels, setAutoLevels] = useState([
-    { servo: 0, led: 3, buzzer: 2 }, // <= 10
-    { servo: 1, led: 2, buzzer: 1 }, // 11-15
-    { servo: 1, led: 1, buzzer: 0 }, // 16-20
-    { servo: 1, led: 0, buzzer: 0 }, // 21-30
-    { servo: 1, led: 0, buzzer: 0 }, // > 30
-  ]);
+  const [activeTab, setActiveTab] = useState("Dashboard");
 
   // Alarm log state
   const [alarmHistory, setAlarmHistory] = useState<any[]>([]);
@@ -486,6 +487,7 @@ function App() {
                     >
                       <button
                         className="btn"
+                        disabled={!modoManual}
                         onClick={() =>
                           updateAutoLevel(
                             levelIdx,
@@ -498,19 +500,21 @@ function App() {
                       </button>
                       <button
                         className="btn"
+                        disabled={!modoManual}
                         onClick={() =>
-                          updateAutoLevel(levelIdx, "led", (level.led + 1) % 4)
+                          updateAutoLevel(levelIdx, "led", (level.led + 1) % 3)
                         }
                       >
                         LED: {ledLabels[level.led]}
                       </button>
                       <button
                         className="btn"
+                        disabled={!modoManual}
                         onClick={() =>
                           updateAutoLevel(
                             levelIdx,
                             "buzzer",
-                            (level.buzzer + 1) % 3,
+                            (level.buzzer + 1) % 2,
                           )
                         }
                       >
